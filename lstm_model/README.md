@@ -20,11 +20,15 @@ $ python split_dataset.py ./emotion.csv -t
 此時工作目錄有以下兩個資料夾，前置作業即完成
 > data
 > ├─ train.csv
+>
 > ├─ valid.csv
+>
 > └─ test.csv
 >
 > field
+>
 > ├─ label_field.pth
+>
 > └─ text_field.pth
 ### 集中式訓練
 預設epoch為5、batch size為32、學習率為0.001
