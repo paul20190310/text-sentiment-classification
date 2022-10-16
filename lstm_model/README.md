@@ -18,13 +18,7 @@ $ python build_field.py ./emotion.csv --saving-directory=./field
 $ python split_dataset.py ./emotion.csv -t
 ```
 此時工作目錄有以下兩個資料夾，前置作業即完成
-data
-├─ test.csv
-├─ train.csv
-└─ valid.csv
-field
-├─ label_field.pth
-└─ text_field.pth
+![](../img/preprocessing_file.jpg)
 ### 集中式訓練
 預設epoch為5、batch size為32、學習率為0.001
 ```
