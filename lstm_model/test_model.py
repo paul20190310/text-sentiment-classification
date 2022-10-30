@@ -33,8 +33,7 @@ def test(model, test_loader):
     
     model.eval()
     with torch.no_grad():
-        progress_bar = tqdm(test_loader, leave=True)
-        for ((text, text_len), labels), _ in progress_bar:
+        for ((text, text_len), labels), _ in tqdm(test_loader, leave=True):
             labels = labels.type(torch.LongTensor)
             labels = labels.to(device)
             text = text.to(device)

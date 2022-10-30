@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sun Oct 30 10:57:53 2022
-
-@author: Owner
-"""
 
 from torch.optim import AdamW
 from torch.utils.data import DataLoader
@@ -161,14 +156,14 @@ def main(args):
     tokenized_train_dataset = tokenized_train_dataset.remove_columns(["text"])
     tokenized_train_dataset = tokenized_train_dataset.rename_column("label", "labels")
     tokenized_train_dataset.set_format("torch")
-    train_dataloader = DataLoader(tokenized_train_dataset), shuffle=True, batch_size=args.batch_size)
+    train_dataloader = DataLoader(tokenized_train_dataset, shuffle=True, batch_size=args.batch_size)
     
     valid_dataset = Dataset.from_csv(args.valid_path)
     tokenized_valid_dataset = valid_dataset.map(tokenize_function, batched=True)
     tokenized_valid_dataset = tokenized_valid_dataset.remove_columns(["text"])
     tokenized_valid_dataset = tokenized_valid_dataset.rename_column("label", "labels")
     tokenized_valid_dataset.set_format("torch")
-    valid_dataloader = DataLoader(tokenized_valid_dataset), shuffle=True, batch_size=args.batch_size)
+    valid_dataloader = DataLoader(tokenized_valid_dataset, shuffle=True, batch_size=args.batch_size)
     
     train(model, optimizer, train_loader=train_dataloader, valid_loader=valid_dataloader,
           model_save_path=args.model_saving_directory,
