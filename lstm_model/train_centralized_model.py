@@ -9,7 +9,7 @@ import argparse
 from tqdm.auto import tqdm
 
 from Mylstm import MyLSTM
-from save_load_util import save_model, save_metrics, load_metrics
+from save_load_util import save_model, save_metrics
 
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -28,7 +28,7 @@ def get_parser():
                         help='specify the path of the label field saving file')
     parser.add_argument('-e', '--epoch', type=int, default=7,
                         help='the number times that the learning algorithm work through the entire training dataset, default 5')
-    parser.add_argument('-eval', '--eval-time', type=int, default=2,
+    parser.add_argument('-et', '--eval-time', type=int, default=2,
                         help='the number evaluate times in a epoch, default 2')
     parser.add_argument('-b', '--batch-size', type=int, default=32,
                         help='batch size of training loader, default 32')
