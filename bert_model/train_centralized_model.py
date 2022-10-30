@@ -40,8 +40,8 @@ def get_parser():
                         help='the number evaluate times in a epoch, default 2')
     parser.add_argument('-b', '--batch-size', type=int, default=4,
                         help='batch size of training loader, default 4')
-    parser.add_argument('-l', '--learning-rate', type=float, default=0.001,
-                        help='learning rate, default 0.001')
+    parser.add_argument('-l', '--learning-rate', type=float, default=0.00005,
+                        help='learning rate, default 0.00005')
     return parser
 
 def train(model, optimizer, train_loader, valid_loader, num_epochs,
@@ -64,7 +64,7 @@ def train(model, optimizer, train_loader, valid_loader, num_epochs,
     valid_loss_list = []
     global_steps_list = []
     
-    # set progress_bar
+    # set progress bar
     progress_bar = tqdm(range(eval_every[0]), leave=True)
     
     # training loop
