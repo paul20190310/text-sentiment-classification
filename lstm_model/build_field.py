@@ -10,8 +10,8 @@ def get_parser():
     parser = argparse.ArgumentParser(description='build data field files by corpus')
     parser.add_argument('corpus_path', type=str,
                         help='specify the path of the corpus file')
-    parser.add_argument('-s', '--saving-directory', type=str, default='.',
-                        help='specify saving directory for field files, default current')
+    parser.add_argument('-s', '--saving-directory', type=str, default='./field/',
+                        help='specify saving directory for field files, default ./field/')
     return parser
 
 def build_field(corpus_path, save_dir):
