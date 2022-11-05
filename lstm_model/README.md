@@ -11,11 +11,11 @@
 ### 前置作業
 1. 以文本資料建置Field檔案，以讓TabularDataset辨認正確資料欄位，建立詞字典
 ```
-$ python build_field.py ./emotion.csv --saving-directory=./field
+$ python build_field.py ../dataset/emotion.csv --saving-directory=./field
 ```
 2. 切割原始訓練資料集為三部分，訓練、驗證、及測試集(指令取消'-t'可只產生訓練及驗證集)
 ```
-$ python split_dataset.py ./emotion.csv -t
+$ python ../dataset/split_dataset.py ../dataset/emotion.csv -t
 ```
 此時工作目錄有以下兩個資料夾，前置作業即完成 
 
