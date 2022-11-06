@@ -1,3 +1,0 @@
-Model loaded from <== ../experiment/centralized_result/lr0125/model.pt
-loss: 0.14744087622353905
-accuracy: 0.9361111111111111
