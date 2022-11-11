@@ -31,7 +31,7 @@ set lr[9]=0.0001
 
 for /l %%n in (0,1,9) do (
     mkdir ..\experiment\centralized_result\!dir_name[%%n]!
-    python train_centralized_model.py ../dataset/centralized_data/train.csv ../dataset/centralized_data/valid.csv --saving-directory=../experiment/centralized_result/!dir_name[%%n]! --epoch=2 --learning-rate=!lr[%%n]!
+    python train_centralized_model.py ../dataset/centralized_data/train.csv ../dataset/centralized_data/valid.csv --saving-directory=../experiment/centralized_result/!dir_name[%%n]! --epoch=200 --learning-rate=!lr[%%n]!
     echo learning rate: !lr[%%n]! >> ../experiment/centralized_result/test_result.txt
     echo ========== best model ========== >> ../experiment/centralized_result/test_result.txt
     echo ----- training result ----- >> ../experiment/centralized_result/test_result.txt
