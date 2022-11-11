@@ -53,6 +53,8 @@ def get_parser():
                         help='Minimum number of total clients in the system. Defaults to 2.')
     parser.add_argument('-s', '--saving-directory', type=str, default='.',
                         help='specify working directory to save model files, default current')
+    parser.add_argument('-b', '--best-valid-loss', type=float, default=float("Inf"),
+                        help='specify the minimum validation loss, default infinite')
     return parser
 
 local_config = None  # define global server config set by main argument
@@ -109,10 +111,14 @@ def evaluate_fn(server_round, parameters, config):
     params_dict = zip(MyLSTM().state_dict().keys(), parameters)
     state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
     save_dict = {'model_state_dict': state_dict,
-                 'valid_loss': 0.0}
-    torch.save(save_dict, local_config['saving_directory'] + '/server_model.pt')
+                 'valid_loss': metrics_dict['valid_loss_list'][-1]}
+    
+    if local_config['best_valid_loss'] > metrics_dict['valid_loss_list'][-1]:
+        local_config['best_valid_loss'] = metrics_dict['valid_loss_list'][-1]
+        torch.save(save_dict, local_config['saving_directory'] + '/server_best_model.pt')
     
     if server_round == local_config['num_round']:
+        torch.save(save_dict, local_config['saving_directory'] + '/server_final_model.pt')
         save_metrics(local_config['saving_directory'] + '/server_metrics.pt',
                      metrics_dict['train_loss_list'],
                      metrics_dict['valid_loss_list'],
@@ -122,7 +128,8 @@ def main(args):
     global local_config
     local_config = {
         'saving_directory': args.saving_directory,
-        'num_round': args.num_round
+        'num_round': args.num_round,
+        'best_valid_loss': args.best_valid_loss
     }
     
     initial_parameters = None

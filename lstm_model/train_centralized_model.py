@@ -120,7 +120,7 @@ def train(model, optimizer, train_loader, valid_loader,
                 # save model
                 if best_valid_loss > average_valid_loss:
                     best_valid_loss = average_valid_loss
-                    save_model(file_path + '/model.pt', model, best_valid_loss)
+                    save_model(file_path + '/best_model.pt', model, best_valid_loss)
                 
                 # reset progress_bar
                 if global_step < num_epochs * len(train_loader):
@@ -128,6 +128,7 @@ def train(model, optimizer, train_loader, valid_loader,
                 
                 eval_time += 1
     
+    save_model(file_path + '/final_model.pt', model, best_valid_loss)
     save_metrics(file_path + '/metrics.pt', train_loss_list, valid_loss_list, global_steps_list)
 
 def main(args):

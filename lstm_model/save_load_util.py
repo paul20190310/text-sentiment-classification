@@ -19,7 +19,6 @@ def load_model(load_path, model):
         return
     state_dict = torch.load(load_path, map_location=device)
     model.load_state_dict(state_dict['model_state_dict'])
-    print(f'Model loaded from <== {load_path}')
     return state_dict['valid_loss']
 
 def save_metrics(save_path, train_loss_list, valid_loss_list, global_steps_list):
@@ -35,5 +34,4 @@ def load_metrics(load_path):
     if load_path==None:
         return
     state_dict = torch.load(load_path, map_location=device)
-    print(f'Metrics loaded from <== {load_path}')
     return state_dict['train_loss_list'], state_dict['valid_loss_list'], state_dict['global_steps_list']
