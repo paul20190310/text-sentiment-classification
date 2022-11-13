@@ -121,10 +121,7 @@ def evaluate_metrics_aggregation_fn(eval_metrics):
 def evaluate_fn(server_round, parameters, config):
     params_dict = zip(MyLSTM().state_dict().keys(), parameters)
     state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
-    '''
-    save_dict = {'model_state_dict': state_dict,
-                 'valid_loss': metrics_dict['valid_loss_list'][-1]}
-    '''
+    
     if len(metrics_dict['valid_acc_list']) > 0 and \
        local_config['best_valid_acc'] < metrics_dict['valid_acc_list'][-1]:
         local_config['best_valid_acc'] = metrics_dict['valid_acc_list'][-1]
