@@ -29,7 +29,7 @@ def get_parser():
 
 def test(model, test_loader):
     criterion = nn.CrossEntropyLoss()
-    correct, total, loss = 0, 0, 0.0
+    correct, total_data_size, loss = 0, 0, 0.0
     
     model.eval()
     with torch.no_grad():
@@ -42,14 +42,13 @@ def test(model, test_loader):
             
             loss += criterion(outputs, labels).item()
             _, predicted_label = torch.max(outputs.data, 1)
-            
-            total += labels.size(0)
+            total_data_size += labels.size(0)
             correct += (predicted_label == labels).sum().item()
-    loss = loss / len(test_loader)  
-    accuracy = correct / total
-    print('loss:', loss)
-    print('accuracy:', accuracy)
-    return loss, accuracy
+    accuracy = correct / total_data_size
+    loss = loss / len(test_loader)
+    print('accuracy: {:.4f}'.format(accuracy))
+    print('loss: {:.4f}'.format(loss))
+    return accuracy, loss
 
 def main(args):
     text_field = torch.load(args.text_field_path)
@@ -63,7 +62,7 @@ def main(args):
                                device=device, sort=True, sort_within_batch=True)
     
     model = MyLSTM().to(device)
-    load_model(args.model_path, model)
+    load_model(args.model_path, model, print_prompts=False)
     test(model, test_iter)
 
 if __name__ == '__main__':

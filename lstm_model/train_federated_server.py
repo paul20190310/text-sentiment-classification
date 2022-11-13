@@ -24,7 +24,7 @@ import os
 
 from collections import OrderedDict
 from Mylstm import MyLSTM
-from save_load_util import save_metrics
+from save_load_util import save_model, save_metrics
 
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -53,12 +53,14 @@ def get_parser():
                         help='Minimum number of total clients in the system. Defaults to 2.')
     parser.add_argument('-s', '--saving-directory', type=str, default='.',
                         help='specify working directory to save model files, default current')
-    parser.add_argument('-b', '--best-valid-loss', type=float, default=float("Inf"),
-                        help='specify the minimum validation loss, default infinite')
+    parser.add_argument('-ba', '--best-valid-accuracy', type=float, default=0.0,
+                        help='specify the minimum validation accuracy, default 0.0')
     return parser
 
 local_config = None  # define global server config set by main argument
 metrics_dict = {
+    'train_acc_list': [],
+    'valid_acc_list': [],
     'train_loss_list': [],
     'valid_loss_list': []
 }
@@ -92,12 +94,19 @@ def fit_metrics_aggregation_fn(fit_metrics):
     total_data_size = sum(data_size for data_size, _ in fit_metrics)
     factors = [data_size / total_data_size for data_size, _ in fit_metrics]
     
-    # metrics[0]為client data size，metrics[1]為client train loss值及valid loss值的dict
+    # metrics[0]為client data size，metrics[1]為client train accuracy值及valid accuracy值的dict
+    agg_train_acc = sum(metrics[1]['train_accuracy'] * factor for metrics, factor in zip(fit_metrics, factors))
+    agg_valid_acc = sum(metrics[1]['valid_accuracy'] * factor for metrics, factor in zip(fit_metrics, factors))
     agg_train_loss = sum(metrics[1]['train_loss'] * factor for metrics, factor in zip(fit_metrics, factors))
     agg_valid_loss = sum(metrics[1]['valid_loss'] * factor for metrics, factor in zip(fit_metrics, factors))
+    metrics_dict['train_acc_list'].append(agg_train_acc)
+    metrics_dict['valid_acc_list'].append(agg_valid_acc)
     metrics_dict['train_loss_list'].append(agg_train_loss)
     metrics_dict['valid_loss_list'].append(agg_valid_loss)
-    return {'train_loss': agg_train_loss, 'valid_loss': agg_valid_loss}
+    return {'train_accuracy': agg_train_acc, 
+            'valid_accuracy': agg_valid_acc,
+            'train_loss': agg_train_loss,
+            'valid_loss': agg_valid_loss}
 
 def evaluate_metrics_aggregation_fn(eval_metrics):
     total_data_size = sum(data_size for data_size, _ in eval_metrics)
@@ -105,21 +114,30 @@ def evaluate_metrics_aggregation_fn(eval_metrics):
  
     # metrics[0]為client data size，metrics[1]為client testing loss值及accuracy的dict
     agg_accuracy = sum(metrics[1]['accuracy'] * factor for metrics, factor in zip(eval_metrics, factors))
-    return {'accuracy': agg_accuracy}
+    agg_loss = sum(metrics[1]['loss'] * factor for metrics, factor in zip(eval_metrics, factors))
+    return {'accuracy': agg_accuracy,
+            'loss': agg_loss}
 
 def evaluate_fn(server_round, parameters, config):
     params_dict = zip(MyLSTM().state_dict().keys(), parameters)
     state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
+    '''
     save_dict = {'model_state_dict': state_dict,
                  'valid_loss': metrics_dict['valid_loss_list'][-1]}
-    
-    if local_config['best_valid_loss'] > metrics_dict['valid_loss_list'][-1]:
-        local_config['best_valid_loss'] = metrics_dict['valid_loss_list'][-1]
-        torch.save(save_dict, local_config['saving_directory'] + '/server_best_model.pt')
+    '''
+    if len(metrics_dict['valid_acc_list']) > 0 and \
+       local_config['best_valid_acc'] < metrics_dict['valid_acc_list'][-1]:
+        local_config['best_valid_acc'] = metrics_dict['valid_acc_list'][-1]
+        model = MyLSTM().to(device)
+        model.load_state_dict(state_dict, strict=True)
+        save_model(local_config['saving_directory'] + '/server_model.pt', model, metrics_dict['valid_acc_list'][-1])
     
     if server_round == local_config['num_round']:
-        torch.save(save_dict, local_config['saving_directory'] + '/server_final_model.pt')
-        save_metrics(local_config['saving_directory'] + '/server_metrics.pt',
+        save_metrics(local_config['saving_directory'] + '/server_accuracy_metrics.pt',
+                     metrics_dict['train_acc_list'],
+                     metrics_dict['valid_acc_list'],
+                     list(range(1, server_round + 1)))
+        save_metrics(local_config['saving_directory'] + '/server_loss_metrics.pt',
                      metrics_dict['train_loss_list'],
                      metrics_dict['valid_loss_list'],
                      list(range(1, server_round + 1)))
@@ -129,14 +147,14 @@ def main(args):
     local_config = {
         'saving_directory': args.saving_directory,
         'num_round': args.num_round,
-        'best_valid_loss': args.best_valid_loss
+        'best_valid_acc': args.best_valid_accuracy
     }
     
     initial_parameters = None
     if os.path.exists(local_config['saving_directory'] + '/server_model.pt'):
         state_dict = torch.load(local_config['saving_directory'] + '/server_model.pt', map_location=device)
         model = MyLSTM().to(device)
-        model.load_state_dict(state_dict['model_state_dict'])
+        model.load_state_dict(state_dict['model_state_dict'], strict=True)
         weights = [val.cpu().numpy() for name, val in model.state_dict().items()]
         initial_parameters = ndarrays_to_parameters(weights)
     
