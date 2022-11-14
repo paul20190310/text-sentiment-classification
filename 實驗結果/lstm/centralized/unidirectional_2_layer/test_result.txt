@@ -1,0 +1,48 @@
+learning rate: 0.01
+----- training result -----
+accuracy: 0.9733
+loss: 0.0635
+----- testing result -----
+accuracy: 0.9272
+loss: 0.2122
+
+learning rate: 0.005
+----- training result -----
+accuracy: 0.9937
+loss: 0.0163
+----- testing result -----
+accuracy: 0.9300
+loss: 0.2941
+
+learning rate: 0.001
+----- training result -----
+accuracy: 0.9979
+loss: 0.0036
+----- testing result -----
+accuracy: 0.9289
+loss: 0.4216
+
+learning rate: 0.0005
+----- training result -----
+accuracy: 0.9980
+loss: 0.0029
+----- testing result -----
+accuracy: 0.9272
+loss: 0.4272
+
+learning rate: 0.0001
+----- training result -----
+accuracy: 0.9979
+loss: 0.0035
+----- testing result -----
+accuracy: 0.9139
+loss: 0.5468
+
+learning rate: 0.00005
+----- training result -----
+accuracy: 0.9976
+loss: 0.0047
+----- testing result -----
+accuracy: 0.8917
+loss: 0.6159
+
