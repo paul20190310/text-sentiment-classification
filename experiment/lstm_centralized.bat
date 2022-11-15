@@ -23,13 +23,13 @@ set lr[5]=0.00005
 
 for /l %%n in (0,1,5) do (
     mkdir ..\experiment\centralized_result\!dir_name[%%n]!
-    python train_centralized_model.py ../dataset/centralized_data/train.csv ../dataset/centralized_data/valid.csv --saving-directory=../experiment/centralized_result/!dir_name[%%n]! --epoch=2 --learning-rate=!lr[%%n]!
+    python train_centralized_model.py ../dataset/centralized_data/train.csv ../dataset/centralized_data/valid.csv --saving-directory=../experiment/centralized_result/!dir_name[%%n]! --epoch=200 --learning-rate=!lr[%%n]!
     echo learning rate: !lr[%%n]!>>../experiment/centralized_result/test_result.txt
     echo ----- training result ----->>../experiment/centralized_result/test_result.txt
     python test_model.py ../experiment/centralized_result/!dir_name[%%n]!/model.pt ../dataset/centralized_data/train.csv >>../experiment/centralized_result/test_result.txt
     echo ----- testing result ----->>../experiment/centralized_result/test_result.txt
     python test_model.py ../experiment/centralized_result/!dir_name[%%n]!/model.pt ../dataset/centralized_data/test.csv >>../experiment/centralized_result/test_result.txt
     echo:>>../experiment/centralized_result/test_result.txt
-    python draw_loss_chart.py ../experiment/centralized_result/!dir_name[%%n]!/accuracy_metrics.pt --saving-path=../experiment/centralized_result/accuracy_!dir_name[%%n]!.png --y-axis-str=Accuracy
-    python draw_loss_chart.py ../experiment/centralized_result/!dir_name[%%n]!/loss_metrics.pt --saving-path=../experiment/centralized_result/loss_!dir_name[%%n]!.png --y-axis-str=Loss
+    python draw_chart.py ../experiment/centralized_result/!dir_name[%%n]!/accuracy_metrics.pt --saving-path=../experiment/centralized_result/accuracy_!dir_name[%%n]!.png --y-axis-str=Accuracy
+    python draw_chart.py ../experiment/centralized_result/!dir_name[%%n]!/loss_metrics.pt --saving-path=../experiment/centralized_result/loss_!dir_name[%%n]!.png --y-axis-str=Loss
 )

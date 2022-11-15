@@ -9,7 +9,7 @@ import argparse
 from tqdm.auto import tqdm
 
 from Mylstm import MyLSTM
-from save_load_util import save_model, save_metrics
+from save_load_util import save_model, save_metrics, load_model
 
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -20,6 +20,8 @@ def get_parser():
                         help='specify the path of the training dataset file')
     parser.add_argument('valid_path', type=str,
                         help='specify the path of the validation dataset file')
+    parser.add_argument('-mp', '--initial-model-path', type=str, default=None,
+                        help='specify the path of initial model saving file. if no specify, use torch default model.')
     parser.add_argument('-s', '--saving-directory', type=str, default='.',
                         help='specify working directory to save model and metrics files, default current')
     parser.add_argument('-tf', '--text-field-path', type=str, default='./field/text_field.pth',
@@ -37,6 +39,20 @@ def get_parser():
     parser.add_argument('-ba', '--best-valid-accuracy', type=float, default=0.0,
                         help='specify the minimum validation accuracy, default 0.0')
     return parser
+
+def load_data(data_file_path, text_field_path, label_field_path,
+              batch_size, is_shuffle=False):
+    ''' load .csv file data and return dataloader '''
+    text_field = torch.load(text_field_path)
+    label_field = torch.load(label_field_path)
+    fields = [('text', text_field), ('label', label_field)]
+    
+    data = TabularDataset(path=data_file_path, format='CSV',
+                          fields=fields, skip_header=True)
+    data_iter = BucketIterator(data, batch_size=batch_size,
+                               sort_key=lambda x: len(x.text), shuffle=is_shuffle,
+                               device=device, sort=True, sort_within_batch=True)
+    return data_iter
 
 # train
 def train(model, optimizer, train_loader, valid_loader,
@@ -80,7 +96,6 @@ def train(model, optimizer, train_loader, valid_loader,
             text = text.to(device)
             text_len = text_len.to('cpu')
             outputs = model(text, text_len)
-            
             loss = criterion(outputs, labels)
             optimizer.zero_grad()
             loss.backward()
@@ -99,11 +114,11 @@ def train(model, optimizer, train_loader, valid_loader,
                (len(global_step_list) > 0 and global_step - global_step_list[-1] == eval_every[eval_time]):
                 progress_bar.close()
                 
+                # validation loop
                 model.eval()
                 with torch.no_grad():
-                    # validation loop
                     valid_data_size = 0
-                    for ((text, text_len), labels), _ in valid_loader:
+                    for ((text, text_len), labels), _ in tqdm(valid_loader):
                         labels = labels.type(torch.LongTensor)
                         labels = labels.to(device)
                         text = text.to(device)
@@ -157,26 +172,20 @@ def train(model, optimizer, train_loader, valid_loader,
     save_metrics(file_path + '/loss_metrics.pt', train_loss_list, valid_loss_list, check_point_list)
 
 def main(args):
-    text_field = torch.load(args.text_field_path)
-    label_field = torch.load(args.label_field_path)
-    fields = [('text', text_field), ('label', label_field)]
-
-    # dataset
-    train_data = TabularDataset(path=args.train_path,
-                                format='CSV', fields=fields, skip_header=True)
-    valid_data = TabularDataset(path=args.valid_path,
-                                format='CSV', fields=fields, skip_header=True)
-    
-    # dataloader
-    train_iter = BucketIterator(train_data, batch_size=args.batch_size,
-                                sort_key=lambda x: len(x.text), shuffle=True,
-                                device=device, sort=True, sort_within_batch=True)
-    valid_iter = BucketIterator(valid_data, batch_size=args.batch_size,
-                                sort_key=lambda x: len(x.text),
-                                device=device, sort=True, sort_within_batch=True)
-    
     model = MyLSTM().to(device)
+    if args.initial_model_path:
+        load_model(args.initial_model_path, model)
     optimizer = optim.AdamW(model.parameters(), lr=args.learning_rate)
+    
+    train_iter = load_data(args.train_path,
+                           args.text_field_path,
+                           args.label_field_path,
+                           args.batch_size, True)
+    valid_iter = load_data(args.valid_path,
+                           args.text_field_path,
+                           args.label_field_path,
+                           args.batch_size)
+    print('Start Training!')
     train(model, optimizer, train_loader=train_iter, valid_loader=valid_iter,
           num_epochs=args.epoch, eval_time_in_epoch=args.eval_time,
           file_path=args.saving_directory, best_valid_acc=args.best_valid_accuracy)

@@ -27,6 +27,20 @@ def get_parser():
                         help='batch size of testing loader, default 32')
     return parser
 
+def load_data(data_file_path, text_field_path, label_field_path,
+              batch_size, is_shuffle=False):
+    ''' load .csv file data and return dataloader '''
+    text_field = torch.load(text_field_path)
+    label_field = torch.load(label_field_path)
+    fields = [('text', text_field), ('label', label_field)]
+    
+    data = TabularDataset(path=data_file_path, format='CSV',
+                          fields=fields, skip_header=True)
+    data_iter = BucketIterator(data, batch_size=batch_size,
+                               sort_key=lambda x: len(x.text), shuffle=is_shuffle,
+                               device=device, sort=True, sort_within_batch=True)
+    return data_iter
+
 def test(model, test_loader):
     criterion = nn.CrossEntropyLoss()
     correct, total_data_size, loss = 0, 0, 0.0
@@ -51,19 +65,15 @@ def test(model, test_loader):
     return accuracy, loss
 
 def main(args):
-    text_field = torch.load(args.text_field_path)
-    label_field = torch.load(args.label_field_path)
-    fields = [('text', text_field), ('label', label_field)]
-
-    test_data = TabularDataset(path=args.dataset_path,
-                               format='CSV', fields=fields, skip_header=True)
-    test_iter = BucketIterator(test_data, batch_size=args.batch_size,
-                               sort_key=lambda x: len(x.text),
-                               device=device, sort=True, sort_within_batch=True)
-    
     model = MyLSTM().to(device)
     load_model(args.model_path, model, print_prompts=False)
+    test_iter = load_data(args.dataset_path,
+                          args.text_field_path,
+                          args.label_field_path,
+                          args.batch_size)
+    print('Start Testing!')
     test(model, test_iter)
+    print('Finished Testing!')
 
 if __name__ == '__main__':
     parser = get_parser()

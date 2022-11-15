@@ -26,6 +26,22 @@ def get_parser():
                         help='batch size of testing loader, default 4')
     return parser
 
+def load_data(data_file_path, tokenizer_path, batch_size, is_shuffle=False):
+    if os.path.exists(tokenizer_path):
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True)
+    
+    dataset = Dataset.from_csv(data_file_path)
+    tokenized_dataset = dataset.map(tokenize_function, batched=True)
+    tokenized_dataset = tokenized_dataset.remove_columns(["text"])
+    tokenized_dataset = tokenized_dataset.rename_column("label", "labels")
+    tokenized_dataset.set_format("torch")
+    return DataLoader(tokenized_dataset, shuffle=is_shuffle, batch_size=batch_size)
+
 def test(model, test_loader):
     metric = load_metric("accuracy")
     testing_loss = 0.0
@@ -50,23 +66,12 @@ def test(model, test_loader):
 
 def main(args):
     model = AutoModelForSequenceClassification.from_pretrained(args.model_path).to(device)
-    
-    if not os.path.exists(args.tokenizer_path):
-        tokenizer_name_or_path = "bert-base-uncased"
-    else:
-        tokenizer_name_or_path = args.tokenizer_path
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
-    
-    def tokenize_function(examples):
-        return tokenizer(examples["text"], padding="max_length", truncation=True)
-    test_dataset = Dataset.from_csv(args.dataset_path)
-    tokenized_test_dataset = test_dataset.map(tokenize_function, batched=True)
-    tokenized_test_dataset = tokenized_test_dataset.remove_columns(["text"])
-    tokenized_test_dataset = tokenized_test_dataset.rename_column("label", "labels")
-    tokenized_test_dataset.set_format("torch")
-    test_dataloader = DataLoader(tokenized_test_dataset.select(range(200)), shuffle=True, batch_size=args.batch_size)
-    
+    test_dataloader = load_data(args.dataset_path,
+                                args.tokenizer_path,
+                                args.batch_size)
+    print('Start Testing!')
     test(model, test_loader=test_dataloader)
+    print('Finished Testing!')
 
 if __name__ == '__main__':
     parser = get_parser()

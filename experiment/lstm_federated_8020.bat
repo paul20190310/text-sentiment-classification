@@ -29,6 +29,6 @@ for /l %%n in (0,1,5) do (
     echo learning rate: !lr[%%n]!>>../experiment/federated_8020_result/test_result.txt
     python test_model.py ../experiment/federated_8020_result/!dir_name[%%n]!/server_model.pt ../dataset/emotion_extra.csv >>../experiment/federated_8020_result/test_result.txt
     echo:>>../experiment/federated_8020_result/test_result.txt
-    python draw_loss_chart.py ../experiment/federated_8020_result/!dir_name[%%n]!/server_accuracy_metrics.pt --saving-path=../experiment/federated_8020_result/accuracy_!dir_name[%%n]!.png --x-axis-str=Epochs --y-axis-str=Accuracy
-    python draw_loss_chart.py ../experiment/federated_8020_result/!dir_name[%%n]!/server_loss_metrics.pt --saving-path=../experiment/federated_8020_result/loss_!dir_name[%%n]!.png --x-axis-str=Epochs --y-axis-str=Loss
+    python draw_chart.py ../experiment/federated_8020_result/!dir_name[%%n]!/server_accuracy_metrics.pt --saving-path=../experiment/federated_8020_result/accuracy_!dir_name[%%n]!.png --x-axis-str=Epochs --y-axis-str=Accuracy
+    python draw_chart.py ../experiment/federated_8020_result/!dir_name[%%n]!/server_loss_metrics.pt --saving-path=../experiment/federated_8020_result/loss_!dir_name[%%n]!.png --x-axis-str=Epochs --y-axis-str=Loss
 )

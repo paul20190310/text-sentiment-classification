@@ -1,59 +1,67 @@
 # -*- coding: utf-8 -*-
 
-import torch
-import torch.nn as nn
 import flwr as fl
 import argparse
+import torch
+import argparse
+import os
+
+from datasets import Dataset, load_metric
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    get_scheduler
+)
 
 from torch.optim import AdamW
-from torchtext.data import TabularDataset, BucketIterator
+from torch.utils.data import DataLoader
 from collections import OrderedDict
 from tqdm.auto import tqdm
 
-from Mylstm import MyLSTM
-from save_load_util import save_model, save_metrics
+from save_load_util import save_metrics
 from test_model import test
 
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 def get_parser():
-    parser = argparse.ArgumentParser(description='train lstm model by training and validation dataset')
+    parser = argparse.ArgumentParser(description='train bert model by training dataset')
     parser.add_argument('train_path', type=str,
                         help='specify the path of the training dataset file')
     parser.add_argument('valid_path', type=str,
                         help='specify the path of the validation dataset file')
     parser.add_argument('test_path', type=str,
                         help='specify the path of the testing dataset file')
-    parser.add_argument('-s', '--saving-directory', type=str, default='.',
-                        help='specify working directory to save model and metrics files, default current')
-    parser.add_argument('-tf', '--text-field-path', type=str, default='./field/text_field.pth',
-                        help='specify the path of the text field saving file')
-    parser.add_argument('-lf', '--label-field-path', type=str, default='./field/label_field.pth',
-                        help='specify the path of the label field saving file')
+    parser.add_argument('-mds', '--model-saving-directory', type=str, default='./model',
+                        help='specify working directory to save model, default ./model')
+    parser.add_argument('-tks', '--tokenizer-saving-directory', type=str, default='./tokenizer',
+                        help='specify working directory to save tokenizer, default ./tokenizer')
+    parser.add_argument('-mts', '--metrics-saving-directory', type=str, default='.',
+                        help='specify working directory to save metrics files, default current')
     return parser
-
 
 model = None  # define global model variable
 local_config = None  # define global client config set by main argument
 
-def load_data(data_file_path, text_field_path, label_field_path,
-              batch_size, is_shuffle=False):
-    ''' load .csv file data and return dataloader '''
-    text_field = torch.load(text_field_path)
-    label_field = torch.load(label_field_path)
-    fields = [('text', text_field), ('label', label_field)]
+def load_data(data_file_path, tokenizer_path, batch_size, is_shuffle=False):
+    if os.path.exists(tokenizer_path):
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        tokenizer.save_pretrained(tokenizer_path)
     
-    data = TabularDataset(path=data_file_path, format='CSV',
-                          fields=fields, skip_header=True)
-    data_iter = BucketIterator(data, batch_size=batch_size,
-                               sort_key=lambda x: len(x.text), shuffle=is_shuffle,
-                               device=device, sort=True, sort_within_batch=True)
-    return data_iter
+    def tokenize_function(examples):
+        return tokenizer(examples["text"], padding="max_length", truncation=True)
+    
+    dataset = Dataset.from_csv(data_file_path)
+    tokenized_dataset = dataset.map(tokenize_function, batched=True)
+    tokenized_dataset = tokenized_dataset.remove_columns(["text"])
+    tokenized_dataset = tokenized_dataset.rename_column("label", "labels")
+    tokenized_dataset.set_format("torch")
+    return DataLoader(tokenized_dataset, shuffle=is_shuffle, batch_size=batch_size)
 
 def train(server_round, model, optimizer, train_loader, valid_loader,
-          num_epochs, eval_time_in_epoch, file_path,
-          criterion = nn.CrossEntropyLoss(),
+          num_epochs, eval_time_in_epoch, model_save_path, metrics_save_path,
           best_valid_acc = 0.0):
     # eval every N step
     eval_every = []
@@ -65,8 +73,6 @@ def train(server_round, model, optimizer, train_loader, valid_loader,
             eval_every.append(len(train_loader) // eval_time_in_epoch)
     
     # initialize metrics values
-    train_correct = 0
-    valid_correct = 0
     train_loss = 0.0
     valid_loss = 0.0
     train_acc_list = []
@@ -78,31 +84,27 @@ def train(server_round, model, optimizer, train_loader, valid_loader,
     global_step = 0
     global_step_list = []
     
-    # set progress_bar
+    # set progress bar
     progress_bar = tqdm(range(eval_every[0]), leave=True)
     
     # training loop
+    metric = load_metric("accuracy")
     model.train()
     for epoch in range(num_epochs):
         eval_time = 0
-        train_data_size = 0
-        for ((text, text_len), labels), _ in train_loader:
-            labels = labels.type(torch.LongTensor)
-            labels = labels.to(device)
-            text = text.to(device)
-            text_len = text_len.to('cpu')
-            outputs = model(text, text_len)
-            
-            loss = criterion(outputs, labels)
-            optimizer.zero_grad()
+        for batch in train_loader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            outputs = model(**batch)
+            loss = outputs.loss
             loss.backward()
             optimizer.step()
+            optimizer.zero_grad()
             
             # update metrics values
-            _, predicted_label = torch.max(outputs.data, 1)
-            train_data_size += labels.size(0)
-            train_correct += (predicted_label == labels).sum().item()
-            train_loss += loss.item()  # 累加loss值
+            logits = outputs.logits
+            predictions = torch.argmax(logits, dim=-1)
+            metric.add_batch(predictions=predictions, references=batch["labels"])
+            train_loss += loss.item()
             global_step += 1
             progress_bar.update(1)
             
@@ -110,27 +112,23 @@ def train(server_round, model, optimizer, train_loader, valid_loader,
             if (len(global_step_list) == 0 and global_step == eval_every[0]) or \
                (len(global_step_list) > 0 and global_step - global_step_list[-1] == eval_every[eval_time]):
                 progress_bar.close()
+                train_acc = metric.compute()['accuracy']
                 
+                # validation loop
                 model.eval()
-                with torch.no_grad():                    
-                    # validation loop
-                    valid_data_size = 0
-                    for ((text, text_len), labels), _ in valid_loader:
-                        labels = labels.type(torch.LongTensor)
-                        labels = labels.to(device)
-                        text = text.to(device)
-                        text_len = text_len.to('cpu')
-                        outputs = model(text, text_len)
+                with torch.no_grad():      
+                    for batch in tqdm(valid_loader):
+                        batch = {k: v.to(device) for k, v in batch.items()}
+                        outputs = model(**batch)
                         
-                        loss = criterion(outputs, labels)
-                        _, predicted_label = torch.max(outputs.data, 1)
-                        valid_data_size += labels.size(0)
-                        valid_correct += (predicted_label == labels).sum().item()
+                        logits = outputs.logits
+                        predictions = torch.argmax(logits, dim=-1)
+                        metric.add_batch(predictions=predictions, references=batch["labels"])
+                        loss = outputs.loss
                         valid_loss += loss.item()
                 
                 # evaluation metrics value
-                train_acc = train_correct / train_data_size
-                valid_acc = valid_correct / valid_data_size
+                valid_acc = metric.compute()['accuracy']
                 average_train_loss = train_loss / eval_every[eval_time]
                 average_valid_loss = valid_loss / len(valid_loader)
                 train_acc_list.append(train_acc)
@@ -139,34 +137,32 @@ def train(server_round, model, optimizer, train_loader, valid_loader,
                 valid_loss_list.append(average_valid_loss)
                 check_point_list.append(epoch + (eval_time + 1) / eval_time_in_epoch)
                 global_step_list.append(global_step)
-                
-                # resetting metrics value
-                train_correct = 0
-                valid_correct = 0
-                train_loss = 0.0                
+        
+                # resetting running loss values
+                train_loss = 0.0
                 valid_loss = 0.0
-                train_data_size = 0
                 model.train()
-                
+        
                 # print progress
                 print('Epoch [{}/{}], Step [{}/{}], Train Acc: {:.4f}, Valid Acc: {:.4f}, Train Loss: {:.4f}, Valid Loss: {:.4f}'
                       .format(epoch + 1, num_epochs, global_step, num_epochs * len(train_loader),
                               train_acc, valid_acc,
                               average_train_loss, average_valid_loss))
-                
+        
                 # save model
                 if best_valid_acc < valid_acc:
                     best_valid_acc = valid_acc
-                    save_model(file_path + '/model.pt', model, best_valid_acc)
+                    model.save_pretrained(model_save_path)
+                    print(f'Model saved to ==> {model_save_path}')
                 
                 # reset progress_bar
                 if global_step < num_epochs * len(train_loader):
                     progress_bar = tqdm(range(eval_every[(eval_time + 1) % eval_time_in_epoch]), leave=True)
                 
                 eval_time += 1
-    
-    save_metrics(file_path + '/accuracy_metrics.pt', train_acc_list, valid_acc_list, check_point_list)
-    save_metrics(file_path + '/loss_metrics.pt', train_loss_list, valid_loss_list, check_point_list)
+                
+    save_metrics(metrics_save_path + '/accuracy_metrics.pt', train_acc_list, valid_acc_list, check_point_list)
+    save_metrics(metrics_save_path + '/loss_metrics.pt', train_loss_list, valid_loss_list, check_point_list)
     
     max_acc_index = max(range(len(valid_acc_list)), key=valid_acc_list.__getitem__)
     return train_acc_list[max_acc_index], valid_acc_list[max_acc_index],\
@@ -184,12 +180,10 @@ class EmotionClient(fl.client.NumPyClient):
     def fit(self, parameters, config):
         self.set_parameters(parameters, config)
         train_iter = load_data(local_config['train_path'],
-                               local_config['text_field_path'],
-                               local_config['label_field_path'],
+                               local_config['tokenizer_saving_directory'],
                                config['batch_size'], True)
         valid_iter = load_data(local_config['valid_path'],
-                               local_config['text_field_path'],
-                               local_config['label_field_path'],
+                               local_config['tokenizer_saving_directory'],
                                config['batch_size'])
         optimizer = AdamW(model.parameters(), lr=config['learning_rate'])
         
@@ -200,7 +194,8 @@ class EmotionClient(fl.client.NumPyClient):
             valid_loader=valid_iter,
             num_epochs=config['local_epochs'],
             eval_time_in_epoch=config['eval_time'],
-            file_path=local_config['saving_directory']
+            model_save_path=local_config['model_saving_directory'],
+            metrics_save_path=local_config['metrics_saving_directory']
         )
         print(f"Finished round {config['current_round']} training!")
         results = {
@@ -214,9 +209,8 @@ class EmotionClient(fl.client.NumPyClient):
     def evaluate(self, parameters, config):
         self.set_parameters(parameters, config)
         test_iter = load_data(local_config['test_path'],
-                              local_config['text_field_path'],
-                              local_config['label_field_path'],
-                              config['batch_size'])
+                               local_config['tokenizer_saving_directory'],
+                               config['batch_size'])
         accuracy, loss = test(model, test_iter)
         results = {
             'accuracy': float(accuracy),
@@ -226,14 +220,19 @@ class EmotionClient(fl.client.NumPyClient):
 
 def main(args):
     global model, local_config
-    model = MyLSTM().to(device)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "bert-base-uncased",
+        num_labels=6,
+        id2label={0:'sadness', 1:'joy', 2:'love', 3:'anger', 4:'fear', 5:'surprise'},
+        label2id={'sadness':0, 'joy':1, 'love':2, 'anger':3, 'fear':4, 'surprise':5}
+    ).to(device)
     local_config = {
         'train_path': args.train_path,
         'valid_path': args.valid_path,
         'test_path': args.test_path,
-        'saving_directory': args.saving_directory,
-        'text_field_path': args.text_field_path,
-        'label_field_path': args.label_field_path
+        'model_saving_directory': args.model_saving_directory,
+        'tokenizer_saving_directory': args.tokenizer_saving_directory,
+        'metrics_saving_directory': args.metrics_saving_directory
     }
     fl.client.start_numpy_client(server_address="[::1]:9999", client=EmotionClient())
 

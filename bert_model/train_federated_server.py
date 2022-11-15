@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 
 from flwr.server.client_proxy import ClientProxy
@@ -14,7 +15,23 @@ from flwr.common import (
     parameters_to_ndarrays,
 )
 
+from datasets import Dataset, load_metric
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    get_scheduler
+)
+
 from typing import Callable, Dict, List, Optional, Tuple, Union
+
+import flwr as fl
+import torch
+import numpy as np
+import argparse
+import os
+
+from collections import OrderedDict
+from save_load_util import save_metrics
 
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -41,8 +58,10 @@ def get_parser():
                         help='Minimum number of clients used during validation. Defaults to 2.')
     parser.add_argument('-ma', '--min-available-clients', type=int, default=2,
                         help='Minimum number of total clients in the system. Defaults to 2.')
-    parser.add_argument('-s', '--saving-directory', type=str, default='.',
-                        help='specify working directory to save model files, default current')
+    parser.add_argument('-mds', '--model-saving-directory', type=str, default='./server_model',
+                        help='specify working directory to save model, default ./server_model')
+    parser.add_argument('-mts', '--metrics-saving-directory', type=str, default='.',
+                        help='specify working directory to save metrics files, default current')
     parser.add_argument('-ba', '--best-valid-accuracy', type=float, default=0.0,
                         help='specify the minimum validation accuracy, default 0.0')
     return parser
@@ -109,22 +128,28 @@ def evaluate_metrics_aggregation_fn(eval_metrics):
             'loss': agg_loss}
 
 def evaluate_fn(server_round, parameters, config):
-    params_dict = zip(MyLSTM().state_dict().keys(), parameters)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "bert-base-uncased",
+        num_labels=6,
+        id2label={0:'sadness', 1:'joy', 2:'love', 3:'anger', 4:'fear', 5:'surprise'},
+        label2id={'sadness':0, 'joy':1, 'love':2, 'anger':3, 'fear':4, 'surprise':5}
+    ).to(device)
+    params_dict = zip(model.state_dict().keys(), parameters)
     state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
-    
+      
     if len(metrics_dict['valid_acc_list']) > 0 and \
        local_config['best_valid_acc'] < metrics_dict['valid_acc_list'][-1]:
         local_config['best_valid_acc'] = metrics_dict['valid_acc_list'][-1]
-        model = MyLSTM().to(device)
         model.load_state_dict(state_dict, strict=True)
-        save_model(local_config['saving_directory'] + '/server_model.pt', model, metrics_dict['valid_acc_list'][-1])
+        model.save_pretrained(local_config['model_saving_directory'])
+        print(f"Model saved to ==> {local_config['model_saving_directory']}")
     
     if server_round == local_config['num_round']:
-        save_metrics(local_config['saving_directory'] + '/server_accuracy_metrics.pt',
+        save_metrics(local_config['metrics_saving_directory'] + '/server_accuracy_metrics.pt',
                      metrics_dict['train_acc_list'],
                      metrics_dict['valid_acc_list'],
                      list(range(1, server_round + 1)))
-        save_metrics(local_config['saving_directory'] + '/server_loss_metrics.pt',
+        save_metrics(local_config['metrics_saving_directory'] + '/server_loss_metrics.pt',
                      metrics_dict['train_loss_list'],
                      metrics_dict['valid_loss_list'],
                      list(range(1, server_round + 1)))
@@ -132,16 +157,20 @@ def evaluate_fn(server_round, parameters, config):
 def main(args):
     global local_config
     local_config = {
-        'saving_directory': args.saving_directory,
+        'model_saving_directory': args.model_saving_directory,
+        'metrics_saving_directory': args.metrics_saving_directory,
         'num_round': args.num_round,
         'best_valid_acc': args.best_valid_accuracy
     }
     
     initial_parameters = None
-    if os.path.exists(local_config['saving_directory'] + '/server_model.pt'):
-        state_dict = torch.load(local_config['saving_directory'] + '/server_model.pt', map_location=device)
-        model = MyLSTM().to(device)
-        model.load_state_dict(state_dict['model_state_dict'], strict=True)
+    if os.path.exists(local_config['model_saving_directory']):
+        model = AutoModelForSequenceClassification.from_pretrained(
+            args.model_saving_directory,
+            num_labels=6,
+            id2label={0:'sadness', 1:'joy', 2:'love', 3:'anger', 4:'fear', 5:'surprise'},
+            label2id={'sadness':0, 'joy':1, 'love':2, 'anger':3, 'fear':4, 'surprise':5}
+        ).to(device)
         weights = [val.cpu().numpy() for name, val in model.state_dict().items()]
         initial_parameters = ndarrays_to_parameters(weights)
     
@@ -171,3 +200,11 @@ if __name__ == '__main__':
     parser = get_parser()
     args = parser.parse_args()
     main(args)
+
+
+
+
+
+
+
+
