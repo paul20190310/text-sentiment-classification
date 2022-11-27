@@ -48,7 +48,7 @@ def load_data(data_file_path, tokenizer_path, batch_size, is_shuffle=False):
     if os.path.exists(tokenizer_path):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     else:
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
         tokenizer.save_pretrained(tokenizer_path)
     
     def tokenize_function(examples):
@@ -167,7 +167,7 @@ def train(model, optimizer, train_loader, valid_loader, num_epochs,
 
 def main(args):
     if not os.path.exists(args.model_saving_directory):
-        model_name_or_path = "bert-base-uncased"
+        model_name_or_path = "distilbert-base-uncased"
     else:
         model_name_or_path = args.model_saving_directory
     model = AutoModelForSequenceClassification.from_pretrained(

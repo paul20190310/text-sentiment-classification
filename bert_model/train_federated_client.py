@@ -47,7 +47,7 @@ def load_data(data_file_path, tokenizer_path, batch_size, is_shuffle=False):
     if os.path.exists(tokenizer_path):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
     else:
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
         tokenizer.save_pretrained(tokenizer_path)
     
     def tokenize_function(examples):
@@ -221,7 +221,7 @@ class EmotionClient(fl.client.NumPyClient):
 def main(args):
     global model, local_config
     model = AutoModelForSequenceClassification.from_pretrained(
-        "bert-base-uncased",
+        "distilbert-base-uncased",
         num_labels=6,
         id2label={0:'sadness', 1:'joy', 2:'love', 3:'anger', 4:'fear', 5:'surprise'},
         label2id={'sadness':0, 'joy':1, 'love':2, 'anger':3, 'fear':4, 'surprise':5}

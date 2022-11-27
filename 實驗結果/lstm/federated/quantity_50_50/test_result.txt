@@ -1,0 +1,7 @@
+learning rate: 0.01
+accuracy: 0.8970
+loss: 0.301
+
+learning rate: 0.0005
+accuracy: 0.9085
+loss: 0.8953

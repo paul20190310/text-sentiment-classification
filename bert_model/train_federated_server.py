@@ -129,7 +129,7 @@ def evaluate_metrics_aggregation_fn(eval_metrics):
 
 def evaluate_fn(server_round, parameters, config):
     model = AutoModelForSequenceClassification.from_pretrained(
-        "bert-base-uncased",
+        "distilbert-base-uncased",
         num_labels=6,
         id2label={0:'sadness', 1:'joy', 2:'love', 3:'anger', 4:'fear', 5:'surprise'},
         label2id={'sadness':0, 'joy':1, 'love':2, 'anger':3, 'fear':4, 'surprise':5}
