@@ -30,7 +30,7 @@
 + 3-3標籤拆分資料（兩個client各拿取3個不同label的資料）
 
 模型架構
-+ 待定
++ 單向LSTM，4層
 
 learning rate
 + 待定
